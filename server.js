@@ -12,7 +12,7 @@ const app = express()
 
 
 // middleware
-app.use(cors({ origin: 'https://money-app-psi.vercel.app/' }))
+app.use(cors({ origin: '*' }))
 app.use(express.json())
 
 mongoose.connect(process.env.DB_URI).then(() => console.log(`Database is connected...`.blue.bold))
@@ -30,7 +30,7 @@ app.use('/api/v1/mess', messRoute)
 
 
 app.get('/', (req, res) => {
-    res.send({message: `Mess manager server is online on port ${PORT}`});
+    res.send({ message: `Mess manager server is online on port ${PORT}` });
 })
 
 

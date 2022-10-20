@@ -1,6 +1,8 @@
 const Mess = require('../schema/messSchema');
+const User = require('../schema/userSchema');
 const jwt = require('jsonwebtoken');
 const errorMessage = require('../utilities/errorMessage')
+const CreateMessValidator = require('../validator/createMessValidator')
 
 // getAllMess
 module.exports.getAllMess = async (req, res, next) => {
@@ -18,16 +20,16 @@ module.exports.createMess = async (req, res, next) => {
         const date = new Date()
         const { id } = req.user
         const { mess_name, mess_month } = req.body
-        if (!mess_name) {
-            return errorMessage(res, 400, 'Please provide a mess name')
+
+        const validate = CreateMessValidator({ mess_name, mess_month })
+        if(!validate.isValid){
+            return errorMessage(res, 400, validate.error)
         }
-        if (!mess_month) {
-            return errorMessage(res, 400, 'Please select a month')
-        }
-        const isExist = await Mess.find({ manager_id: id })
-        console.log(isExist.length)
-        if (!!isExist.length) {
-            return errorMessage(res, 500, 'You already have a mess in this account')
+
+        const isExistId = await Mess.find({ manager_id: id })
+        const isExistMonth = await Mess.find({ mess_month })
+        if (!!isExistId.length && !!isExistMonth.length) {
+            return errorMessage(res, 403, 'You Already Have a Mess in This Account on This Month')
         }
         const mess = new Mess({
             mess_name,
@@ -43,6 +45,12 @@ module.exports.createMess = async (req, res, next) => {
             members: [id]
         })
         const result = await mess.save()
+
+        const userResult = await User.findByIdAndUpdate(id, {mess_id: result._id}, {new: true})
+        console.log(userResult)
+
+
+
         return res.status(200).send({
             status: true,
             message: 'Mess created successfully',

@@ -91,7 +91,6 @@ module.exports.login = async (req, res, next) => {
             if (!result) {
                 return errorMessage(res, 400, { password: "User and password doesn't match" })
             }
-            console.log(user)
             // create token
             const token = jwt.sign({
                 id: user._id,
@@ -169,8 +168,7 @@ module.exports.deleteAllUsers = async (req, res, next) => {
     }
 }
 
-/* 
-// Get user 
+ // Get user 
 module.exports.getUser = async (req, res, next) => {
     const { email } = req.user
     try {
@@ -192,5 +190,5 @@ module.exports.getUser = async (req, res, next) => {
     }
 
 }
-*/
+
 

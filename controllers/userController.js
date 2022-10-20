@@ -115,16 +115,6 @@ module.exports.login = async (req, res, next) => {
     }
 }
 
-// Delete all users
-module.exports.deleteAllUsers = async (req, res, next) => {
-    try {
-        const result = await User.deleteMany()
-        return res.send(result)
-    } catch (err) {
-        return errorMessage(res, 500, 'Internal server error occurred')
-    }
-}
-
 
 // Get all user 
 module.exports.getAllUsers = async (req, res, next) => {
@@ -140,29 +130,6 @@ module.exports.getAllUsers = async (req, res, next) => {
             status: true,
             message: 'Successfully retrieved',
             users,
-        })
-    } catch (error) {
-        return errorMessage(res, 400, "Server Error occurred", error)
-    }
-
-}
-
-// Get user 
-module.exports.getUser = async (req, res, next) => {
-    const { email } = req.user
-    try {
-        const user = await User.findOne({ email })
-        if (!user) {
-            return res.send({
-                status: false,
-                message: 'No user found',
-            })
-        }
-        user.password = ''
-        res.send({
-            status: true,
-            message: 'Successfully retrieved',
-            user,
         })
     } catch (error) {
         return errorMessage(res, 400, "Server Error occurred", error)
@@ -192,6 +159,38 @@ module.exports.getSingleUsers = async (req, res, next) => {
 
 }
 
+// Delete all users
+module.exports.deleteAllUsers = async (req, res, next) => {
+    try {
+        const result = await User.deleteMany()
+        return res.send(result)
+    } catch (err) {
+        return errorMessage(res, 500, 'Internal server error occurred')
+    }
+}
 
+/* 
+// Get user 
+module.exports.getUser = async (req, res, next) => {
+    const { email } = req.user
+    try {
+        const user = await User.findOne({ email })
+        if (!user) {
+            return res.send({
+                status: false,
+                message: 'No user found',
+            })
+        }
+        user.password = ''
+        res.send({
+            status: true,
+            message: 'Successfully retrieved',
+            user,
+        })
+    } catch (error) {
+        return errorMessage(res, 400, "Server Error occurred", error)
+    }
 
+}
+*/
 

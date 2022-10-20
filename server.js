@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 require('dotenv').config()
 
 const userRoute = require('./routes/userRoute');
+const messRoute = require('./routes/messRoute');
 
 const PORT = process.env.PORT || 5000
 const app = express()
@@ -18,7 +19,7 @@ mongoose.connect(process.env.DB_URI).then(() => console.log(`Database is connect
 
 // user
 app.use('/api/v1/users', userRoute)
-// app.use('/api/v1/transition', transitionRoute)
+app.use('/api/v1/mess', messRoute)
 
 
 

@@ -48,8 +48,6 @@ module.exports.register = async (req, res, next) => {
                     id: user._id,
                     name: result.name,
                     email: result.email,
-                    post: user.post,
-                    mess_id: user.mess_id,
                 }, process.env.JWT_SECRETE)
 
                 return res.status(200).send({
@@ -96,8 +94,6 @@ module.exports.login = async (req, res, next) => {
                 id: user._id,
                 name: user.name,
                 email: user.email,
-                post: user.post,
-                mess_id: user.mess_id,
             },
                 process.env.JWT_SECRETE,
                 // { expiresIn: '1d' }

@@ -6,23 +6,27 @@ const jwtVerify = require('../utilities/jwtVerify')
 //GET: http://localhost:5000/api/v1/mess/all
 router.get('/all', jwtVerify, messController.getAllMess)
 
-//POST: http://localhost:5000/api/v1/mess
-router.post('/', jwtVerify, messController.createMess)
-
 // DELETE: http://localhost:5000/api/v1/mess/all
 router.delete('/all', messController.deleteAllMess)
 
 
+//GET: http://localhost:5000/api/v1/mess/singleMess
+router.get('/singleMess', jwtVerify, messController.getSingleMess)
+
+//POST: http://localhost:5000/api/v1/mess/addMember
+router.post('/addMember', jwtVerify, messController.addMember)
 
 
 
+
+
+//POST: http://localhost:5000/api/v1/mess
+router.post('/', jwtVerify, messController.createMess)
 /* 
 
-//GET: http://localhost:5000/api/v1/users/all
+//GET: http://localhost:5000/api/v1/mess/all
 router.get('/all', userController.getAllUsers)
 
-//GET: http://localhost:5000/api/v1/users/:id
-router.get('/:id', userController.getSingleUsers)
 
 
 

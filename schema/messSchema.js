@@ -21,10 +21,7 @@ const messSchema = new Schema({
     total_meal_cost: String,
     total_other_cost: String,
     total_solo_cost: String,
-    members: [{
-        type: Schema.Types.ObjectId,
-        ref: 'User',
-    }]
+    members: Array,
 }, { timestamps: true, });
 
 const Mess = mongoose.model('Mess', messSchema);

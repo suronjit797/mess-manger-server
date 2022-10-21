@@ -16,6 +16,9 @@ router.get('/singleMess', jwtVerify, messController.getSingleMess)
 //POST: http://localhost:5000/api/v1/mess/addMember
 router.post('/addMember', jwtVerify, messController.addMember)
 
+//POST: http://localhost:5000/api/v1/mess/addMembersMoney
+router.post('/addMembersMoney', jwtVerify, messController.addMembersMoney)
+
 
 
 

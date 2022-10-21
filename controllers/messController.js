@@ -94,11 +94,32 @@ module.exports.addMember = async (req, res, next) => {
         const messResult = await Mess.findById(mess_id)
         const user = await User.findOne({ email }, '-password')
 
-        const updatedMess = {
-            ...messResult._doc,
-            members: [...messResult.members, user]
+        // check empty email
+        if (!email) {
+            return errorMessage(res, 404, { email: 'Please provide a email to add member' })
         }
 
+        // check empty email
+        if (!user) {
+            return errorMessage(res, 405, 'No User Found')
+        }
+
+        // check duplicate member
+        const isMember = messResult.members.filter(member => member.email === email)
+        if (isMember.length > 0) {
+            return errorMessage(res, 405, 'Member already exists')
+        }
+        const updatedUser = {
+            ...user._doc,
+            mess_id: mess_id
+        }
+
+        const userResult = await User.findOneAndUpdate({ email }, updatedUser, { new: true }).select('-password')
+
+        const updatedMess = {
+            ...messResult._doc,
+            members: [...messResult.members, userResult]
+        }
         const result = await Mess.findByIdAndUpdate(mess_id, updatedMess, { new: true })
 
         return res.status(200).send({

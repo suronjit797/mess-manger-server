@@ -101,6 +101,7 @@ module.exports.addMember = async (req, res, next) => {
         const { id } = req.user
         const { email } = req.body
         const { mess_id } = await User.findById(id)
+
         const messResult = await Mess.findById(mess_id)
         const user = await User.findOne({ email }, '-password')
         // check empty email

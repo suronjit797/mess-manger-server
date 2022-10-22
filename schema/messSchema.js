@@ -16,6 +16,7 @@ const messSchema = new Schema({
     finished: Boolean,
     manager_id: String,
     month_id: String,
+    month_year: Number,
     total_deposit: String,
     total_meal: String,
     total_meal_cost: String,

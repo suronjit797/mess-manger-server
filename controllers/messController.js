@@ -1,12 +1,90 @@
+const moment = require('moment')
 const Mess = require('../schema/messSchema');
 const User = require('../schema/userSchema');
-const jwt = require('jsonwebtoken');
+const Month = require('../schema/monthSchema');
 const errorMessage = require('../utilities/errorMessage')
 const createMessValidator = require('../validator/createMessValidator')
 const addMoneyValidator = require('../validator/addMoneyValidator');
 const addMealValidator = require('../validator/addMealValidator');
 const addMealCostValidator = require('../validator/addMealCostValidator');
-const { ObjectId } = require("mongodb")
+
+const year = moment().format('yyyy');
+
+
+// createMess
+module.exports.createMess = async (req, res, next) => {
+    // try {
+    const date = new Date()
+    const { id } = req.user
+    const { mess_name, mess_month } = req.body
+
+    // validate data
+    const validate = createMessValidator({ mess_name, mess_month })
+    if (!validate.isValid) {
+        return errorMessage(res, 400, validate.error)
+    }
+    const member = await User.findById(id, '-password')
+
+    // check duplicate 
+    const isExistId = await Mess.find({ manager_id: id })
+    const isExistMonth = await Mess.find({ mess_month })
+    if (!!isExistId.length && !!isExistMonth.length) {
+        return errorMessage(res, 403, 'You Already Have a Mess in This Account on This Month')
+    }
+    // mess instance
+    const mess = new Mess({
+        mess_name,
+        mess_month,
+        finished: false,
+        manager_id: id,
+        month_id: `m-${date.getTime()}`,
+        month_year: Number(year),
+        total_deposit: 0,
+        total_meal: 0,
+        total_meal_cost: 0,
+        total_other_cost: 0,
+        total_solo_cost: 0,
+        members: []
+    })
+
+    const createdMess = await mess.save()
+    await Month.updateMany(null, { active: false, })
+    const month = new Month({
+        month: mess_month,
+        year: Number(year),
+        active: true,
+        mess_id: createdMess._id
+    })
+
+    // save mess data
+    await month.save()
+
+
+    // update user and add members/manager
+    const updateUser = {
+        ...member._doc,
+        post: 'manager',
+        mess_id: createdMess._id
+    }
+    const updatedMess = {
+        ...createdMess._doc,
+        members: [...createdMess._doc.members, updateUser]
+    }
+    await User.findByIdAndUpdate(id, updateUser, { new: true })
+    const result = await Mess.findByIdAndUpdate(createdMess._id, updatedMess, { new: true })
+
+    // send response
+    return res.status(200).send({
+        status: true,
+        message: 'Mess created successfully',
+        mess: result
+    })
+
+    // catch error
+    // } catch (err) {
+    //     return errorMessage(res, 500, 'Internal server error occurred')
+    // }
+}
 
 // getAllMess
 module.exports.getAllMess = async (req, res, next) => {
@@ -23,7 +101,11 @@ module.exports.getSingleMess = async (req, res, next) => {
     try {
         const { id } = req.user
         const { mess_id } = await User.findById(id)
-        const result = await Mess.findOne({ mess_id })
+        const { month, year } = await Month.findOne({ mess_id, active: true })
+        const result = await Mess.findOne({ mess_id, mess_month: month, month_year: year })
+        if (!result) {
+            return errorMessage(res, 404, `No mess found in ${month}, ${year} on your account`)
+        }
         return res.status(200).send({
             status: true,
             message: 'Mess data get successfully',
@@ -34,69 +116,6 @@ module.exports.getSingleMess = async (req, res, next) => {
     }
 }
 
-// createMess
-module.exports.createMess = async (req, res, next) => {
-    try {
-        const date = new Date()
-        const { id } = req.user
-        const { mess_name, mess_month } = req.body
-
-        // validate data
-        const validate = createMessValidator({ mess_name, mess_month })
-        if (!validate.isValid) {
-            return errorMessage(res, 400, validate.error)
-        }
-        const member = await User.findById(id, '-password')
-
-        // check duplicate 
-        const isExistId = await Mess.find({ manager_id: id })
-        const isExistMonth = await Mess.find({ mess_month })
-        if (!!isExistId.length && !!isExistMonth.length) {
-            return errorMessage(res, 403, 'You Already Have a Mess in This Account on This Month')
-        }
-        // mess instance
-        const mess = new Mess({
-            mess_name,
-            mess_month,
-            finished: false,
-            manager_id: id,
-            month_id: `m-${date.getTime()}`,
-            total_deposit: 0,
-            total_meal: 0,
-            total_meal_cost: 0,
-            total_other_cost: 0,
-            total_solo_cost: 0,
-            members: []
-        })
-
-        // save mess data
-        const createdMess = await mess.save()
-
-        // update user and add members/manager
-        const updateUser = {
-            ...member._doc,
-            post: 'manager',
-            mess_id: createdMess._id
-        }
-        const updatedMess = {
-            ...createdMess._doc,
-            members: [...createdMess._doc.members, updateUser]
-        }
-        await User.findByIdAndUpdate(id, updateUser, { new: true })
-        const result = await Mess.findByIdAndUpdate(createdMess._id, updatedMess, { new: true })
-
-        // send response
-        return res.status(200).send({
-            status: true,
-            message: 'Mess created successfully',
-            mess: result
-        })
-
-        // catch error
-    } catch (err) {
-        return errorMessage(res, 500, 'Internal server error occurred')
-    }
-}
 
 // addMember
 module.exports.addMember = async (req, res, next) => {
@@ -395,21 +414,24 @@ module.exports.removeMember = async (req, res, next) => {
             return errorMessage(res, 405, 'Only manager can remove member')
         }
 
-        if(id === userId){
+        if (id === userId) {
             return errorMessage(res, 405, 'Manager cannot be remove')
         }
+        const deletedMember = messResult.members.find(member => member._id.equals(userId))
+        if (Number(deletedMember.balance) > 0 || Number(deletedMember.meal) > 0 || Number(deletedMember.solo) > 0) {
+            return errorMessage(res, 405, 'Members have some unsolved amounts')
+        }
+
+        // filter member
         const newManager = messResult.members.filter(member => !(member._id.equals(userId)))
-
-
         const updatedData = {
             ...messResult._doc,
             manager_id: userId,
             members: newManager
         }
-        res.send({updatedData})
 
+        // changed in database
         const result = await Mess.findByIdAndUpdate(mess_id, updatedData, { new: true })
-
         // send response
         return res.status(200).send({
             status: true,
@@ -439,8 +461,9 @@ module.exports.removeMember = async (req, res, next) => {
 module.exports.deleteAllMess = async (req, res, next) => {
     try {
         const result = await Mess.deleteMany()
+        const monthResult = await Month.deleteMany()
         await User.updateMany(null, { mess_id: '', post: 'member' }, { new: true })
-        return res.send(result)
+        return res.send({ result, monthResult })
     } catch (err) {
         return errorMessage(res, 500, 'Internal server error occurred')
     }

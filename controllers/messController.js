@@ -3,7 +3,10 @@ const User = require('../schema/userSchema');
 const jwt = require('jsonwebtoken');
 const errorMessage = require('../utilities/errorMessage')
 const createMessValidator = require('../validator/createMessValidator')
-const addMoneyValidator = require('../validator/addMoneyValidator')
+const addMoneyValidator = require('../validator/addMoneyValidator');
+const addMealValidator = require('../validator/addMealValidator');
+const addMealCostValidator = require('../validator/addMealCostValidator');
+const { ObjectId } = require("mongodb")
 
 // getAllMess
 module.exports.getAllMess = async (req, res, next) => {
@@ -18,14 +21,14 @@ module.exports.getAllMess = async (req, res, next) => {
 // getSingleMess
 module.exports.getSingleMess = async (req, res, next) => {
     try {
-    const { id } = req.user
-    const { mess_id } = await User.findById(id)
-    const result = await Mess.findOne({mess_id})
-    return res.status(200).send({
-        status: true,
-        message: 'Mess data get successfully',
-        mess: result
-    })
+        const { id } = req.user
+        const { mess_id } = await User.findById(id)
+        const result = await Mess.findOne({ mess_id })
+        return res.status(200).send({
+            status: true,
+            message: 'Mess data get successfully',
+            mess: result
+        })
     } catch (err) {
         return errorMessage(res, 500, 'Internal server error occurred')
     }
@@ -100,17 +103,20 @@ module.exports.addMember = async (req, res, next) => {
     try {
         const { id } = req.user
         const { email } = req.body
-        const { mess_id } = await User.findById(id)
+        const { mess_id, post } = await User.findById(id)
 
         const messResult = await Mess.findById(mess_id)
-        const user = await User.findOne({ email }, '-password')
         // check empty email
         if (!email) {
             return errorMessage(res, 404, { email: 'Please provide a email to add member' })
         }
+        const user = await User.findOne({ email }, '-password')
         // check empty email
         if (!user) {
             return errorMessage(res, 405, 'No User Found')
+        }
+        if (post.toLowerCase() !== 'manager') {
+            return errorMessage(res, 405, 'Only manager can add member')
         }
         // check duplicate member
         const isMember = messResult.members.filter(member => member.email === email)
@@ -143,14 +149,17 @@ module.exports.addMembersMoney = async (req, res, next) => {
     try {
         const { id } = req.user
         const { email, amount } = req.body
-        const { mess_id } = await User.findById(id)
+        const { mess_id, post } = await User.findById(id)
         const messResult = await Mess.findById(mess_id)
-        const user = await User.findOne({ email }, '-password')
         // validate input
         const validate = addMoneyValidator({ email, amount })
 
         if (!validate.isValid) {
             return errorMessage(res, 405, validate.error)
+        }
+
+        if (post.toLowerCase() !== 'manager') {
+            return errorMessage(res, 405, 'Only manager can add money')
         }
 
         // is mess member
@@ -177,6 +186,234 @@ module.exports.addMembersMoney = async (req, res, next) => {
         return res.status(200).send({
             status: true,
             message: 'Money add successfully',
+            mess: result
+        })
+    } catch (err) {
+        return errorMessage(res, 500, 'Internal server error occurred')
+    }
+}
+
+// addMember's meal
+module.exports.addMembersMeal = async (req, res, next) => {
+    try {
+        const { id } = req.user
+        const { email, meal } = req.body
+        const { mess_id, post } = await User.findById(id)
+        const messResult = await Mess.findById(mess_id)
+        // validate input
+        const validate = addMealValidator({ email, meal })
+
+        if (!validate.isValid) {
+            return errorMessage(res, 405, validate.error)
+        }
+
+        if (post.toLowerCase() !== 'manager') {
+            return errorMessage(res, 405, 'Only manager can add meal')
+        }
+
+        // is mess member
+        const isMember = messResult.members.filter(member => member.email === email)
+        if (isMember.length === 0) {
+            return errorMessage(res, 405, 'Member Not Found, Please Add Member')
+        }
+
+        // update member meal
+        const updatedMeal = messResult.members.map(member => {
+            if (member.email === email) {
+                member.meal = Number(member.meal) + Number(meal)
+            }
+            return member
+        })
+        const updatedMess = {
+            ...messResult._doc,
+            total_meal: Number(messResult._doc.total_meal) + Number(meal),
+            members: updatedMeal
+        }
+
+        // send response
+        const result = await Mess.findByIdAndUpdate(mess_id, updatedMess, { new: true })
+        return res.status(200).send({
+            status: true,
+            message: 'Meal add successfully',
+            mess: result
+        })
+    } catch (err) {
+        return errorMessage(res, 500, 'Internal server error occurred')
+    }
+}
+
+// addMember's meal cost
+module.exports.addMembersMealCost = async (req, res, next) => {
+    try {
+        const { id } = req.user
+        const { email, mealCost } = req.body
+        const { mess_id, post } = await User.findById(id)
+        const messResult = await Mess.findById(mess_id)
+        // validate input
+        const validate = addMealCostValidator({ email, mealCost })
+
+        if (!validate.isValid) {
+            return errorMessage(res, 405, validate.error)
+        }
+
+        if (post.toLowerCase() !== 'manager') {
+            return errorMessage(res, 405, 'Only manager can add meal cost')
+        }
+
+        // is mess member
+        const isMember = messResult.members.filter(member => member.email === email)
+        if (isMember.length === 0) {
+            return errorMessage(res, 405, 'Member Not Found, Please Add Member')
+        }
+
+        const updatedMess = {
+            ...messResult._doc,
+            total_meal_cost: Number(messResult._doc.total_meal_cost) + Number(mealCost),
+        }
+
+        // send response
+        const result = await Mess.findByIdAndUpdate(mess_id, updatedMess, { new: true })
+        return res.status(200).send({
+            status: true,
+            message: 'Meal cost add successfully',
+            mess: result
+        })
+    } catch (err) {
+        return errorMessage(res, 500, 'Internal server error occurred')
+    }
+}
+
+// Add Other cost
+module.exports.addOtherCost = async (req, res, next) => {
+    try {
+        const { id } = req.user
+        const { email, isIndividual, cost } = req.body
+        const { mess_id, post } = await User.findById(id)
+        const messResult = await Mess.findById(mess_id)
+
+        // authorization
+        if (post.toLowerCase() !== 'manager') {
+            return errorMessage(res, 405, 'Only manager can add meal cost')
+        }
+
+        let updatedMess
+
+        if (isIndividual) {
+            // is mess member
+            const isMember = messResult.members.filter(member => member.email === email)
+            if (isMember.length === 0) {
+                return errorMessage(res, 405, 'Member Not Found, Please Add Member')
+            }
+
+            // update member solo cost
+            const updatedSoloCost = messResult.members.map(member => {
+                if (member.email === email) {
+                    member.solo = Number(member.solo) + Number(cost)
+                }
+                return member
+            })
+
+            updatedMess = {
+                ...messResult._doc,
+                total_solo_cost: Number(messResult._doc.total_solo_cost) + Number(cost),
+                members: updatedSoloCost
+            }
+        } else {
+            updatedMess = {
+                ...messResult._doc,
+                total_other_cost: Number(messResult._doc.total_other_cost) + Number(cost),
+            }
+        }
+
+        // send response
+        const result = await Mess.findByIdAndUpdate(mess_id, updatedMess, { new: true })
+        return res.status(200).send({
+            status: true,
+            message: 'Other cost add successfully',
+            mess: result
+        })
+    } catch (err) {
+        return errorMessage(res, 500, 'Internal server error occurred')
+    }
+}
+
+// changeManager
+module.exports.changeManager = async (req, res, next) => {
+    try {
+        const { id } = req.user
+        const { userId } = req.body
+        const { mess_id, post } = await User.findById(id)
+        const messResult = await Mess.findById(mess_id)
+
+        // authorization
+        if (post.toLowerCase() !== 'manager') {
+            return errorMessage(res, 405, 'Only manager can change post')
+        }
+
+        const newManager = messResult.members.map(member => {
+            if (member._id.equals(userId)) {
+                member.post = 'manager'
+            }
+            if (member._id.equals(id)) {
+                member.post = 'member'
+            }
+            return member
+        })
+
+        const updatedData = {
+            ...messResult._doc,
+            manager_id: userId,
+            members: newManager
+        }
+
+        await User.findByIdAndUpdate(id, { post: 'member' }, { new: true })
+        await User.findByIdAndUpdate(userId, { post: 'manager' }, { new: true })
+        const result = await Mess.findByIdAndUpdate(mess_id, updatedData, { new: true })
+
+        // send response
+        return res.status(200).send({
+            status: true,
+            message: 'Manager changed successfully',
+            mess: result
+        })
+    } catch (err) {
+        return errorMessage(res, 500, 'Internal server error occurred')
+    }
+}
+
+
+// removeMember
+module.exports.removeMember = async (req, res, next) => {
+    try {
+        const { id } = req.user
+        const { userId } = req.body
+        const { mess_id, post } = await User.findById(id)
+        const messResult = await Mess.findById(mess_id)
+
+        // authorization
+        if (post.toLowerCase() !== 'manager') {
+            return errorMessage(res, 405, 'Only manager can remove member')
+        }
+
+        if(id === userId){
+            return errorMessage(res, 405, 'Manager cannot be remove')
+        }
+        const newManager = messResult.members.filter(member => !(member._id.equals(userId)))
+
+
+        const updatedData = {
+            ...messResult._doc,
+            manager_id: userId,
+            members: newManager
+        }
+        res.send({updatedData})
+
+        const result = await Mess.findByIdAndUpdate(mess_id, updatedData, { new: true })
+
+        // send response
+        return res.status(200).send({
+            status: true,
+            message: 'Member remove successfully',
             mess: result
         })
     } catch (err) {

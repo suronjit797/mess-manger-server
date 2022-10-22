@@ -19,6 +19,21 @@ router.post('/addMember', jwtVerify, messController.addMember)
 //POST: http://localhost:5000/api/v1/mess/addMembersMoney
 router.post('/addMembersMoney', jwtVerify, messController.addMembersMoney)
 
+//POST: http://localhost:5000/api/v1/mess/addMembersMeal
+router.post('/addMembersMeal', jwtVerify, messController.addMembersMeal)
+
+//POST: http://localhost:5000/api/v1/mess/addMembersMealCost
+router.post('/addMembersMealCost', jwtVerify, messController.addMembersMealCost)
+
+//POST: http://localhost:5000/api/v1/mess/addOtherCost
+router.post('/addOtherCost', jwtVerify, messController.addOtherCost)
+
+//POST: http://localhost:5000/api/v1/mess/changeManager
+router.post('/changeManager', jwtVerify, messController.changeManager)
+
+//POST: http://localhost:5000/api/v1/mess/removeMember
+router.post('/removeMember', jwtVerify, messController.removeMember)
+
 
 
 

@@ -7,83 +7,173 @@ const createMessValidator = require('../validator/createMessValidator')
 const addMoneyValidator = require('../validator/addMoneyValidator');
 const addMealValidator = require('../validator/addMealValidator');
 const addMealCostValidator = require('../validator/addMealCostValidator');
-
+const { ObjectId } = require('mongodb')
 const year = moment().format('yyyy');
 
 
 // createMess
 module.exports.createMess = async (req, res, next) => {
-    // try {
-    const date = new Date()
-    const { id } = req.user
-    const { mess_name, mess_month } = req.body
+    try {
+        const date = new Date()
+        const { id } = req.user
+        const { mess_name, mess_month } = req.body
 
-    // validate data
-    const validate = createMessValidator({ mess_name, mess_month })
-    if (!validate.isValid) {
-        return errorMessage(res, 400, validate.error)
+        // validate data
+        const validate = createMessValidator({ mess_name, mess_month, })
+        if (!validate.isValid) {
+            return errorMessage(res, 400, validate.error)
+        }
+        const member = await User.findById(id, '-password')
+
+        // check duplicate 
+        const isExistId = await Mess.find({ manager_id: id })
+        const isExistMonth = await Mess.find({ mess_month })
+        if (!!isExistId.length && !!isExistMonth.length) {
+            return errorMessage(res, 403, 'You Already Have a Mess in This Account on This Month')
+        }
+        // mess instance
+        const mess = new Mess({
+            mess_name,
+            mess_month,
+            finished: false,
+            manager_id: id,
+            month_id: `m-${date.getTime()}`,
+            month_year: Number(year),
+            total_deposit: 0,
+            total_meal: 0,
+            total_meal_cost: 0,
+            total_other_cost: 0,
+            total_solo_cost: 0,
+            members: []
+        })
+
+        const createdMess = await mess.save()
+        await Month.updateMany(null, { active: false, })
+        const month = new Month({
+            month: mess_month,
+            year: Number(year),
+            active: true,
+            mess_id: createdMess._id
+        })
+
+        // save mess data
+        await month.save()
+
+
+        // update user and add members/manager
+        const updateUser = {
+            ...member._doc,
+            post: 'manager',
+            mess_id: createdMess._id
+        }
+        const updatedMess = {
+            ...createdMess._doc,
+            members: [...createdMess._doc.members, updateUser]
+        }
+        await User.findByIdAndUpdate(id, updateUser, { new: true })
+        const result = await Mess.findByIdAndUpdate(createdMess._id, updatedMess, { new: true })
+
+        // send response
+        return res.status(200).send({
+            status: true,
+            message: 'Mess created successfully',
+            mess: result
+        })
+
+        // catch error
+    } catch (err) {
+        return errorMessage(res, 500, 'Internal server error occurred')
     }
-    const member = await User.findById(id, '-password')
+}
 
-    // check duplicate 
-    const isExistId = await Mess.find({ manager_id: id })
-    const isExistMonth = await Mess.find({ mess_month })
-    if (!!isExistId.length && !!isExistMonth.length) {
-        return errorMessage(res, 403, 'You Already Have a Mess in This Account on This Month')
+// createMess
+module.exports.createNew = async (req, res, next) => {
+    try {
+        const date = new Date()
+        const { id } = req.user
+        const { mess_month } = req.body
+
+        const member = await User.findById(id, '-password')
+        const messRes = await Mess.findById(member.mess_id)
+
+        // check duplicate 
+        const isExistId = await Mess.find({ manager_id: id })
+        const isExistMonth = await Mess.find({ mess_month })
+        if (!!isExistId.length && !!isExistMonth.length) {
+            return errorMessage(res, 403, 'You Already Have a Mess in This Account on This Month')
+        }
+
+        // mess instance
+        const mess = new Mess({
+            mess_name: messRes.mess_name,
+            mess_month,
+            finished: false,
+            manager_id: id,
+            month_id: `m-${date.getTime()}`,
+            month_year: Number(year),
+            total_deposit: 0,
+            total_meal: 0,
+            total_meal_cost: 0,
+            total_other_cost: 0,
+            total_solo_cost: 0,
+            members: []
+        })
+
+        // create mess
+        const createdMess = await mess.save()
+
+        // update month
+        await Month.updateMany(null, { active: false, })
+
+        // create month
+        const month = new Month({
+            month: mess_month,
+            year: Number(year),
+            active: true,
+            mess_id: createdMess._id
+        })
+
+        // save month
+        await month.save()
+        // update user and add members/manager
+        const updateUser = {
+            ...member._doc,
+            post: 'manager',
+            mess_id: createdMess._id
+        }
+
+        // update all member
+        const updatedMember = messRes.members.map(member => {
+            member.balance = 0
+            member.meal = 0
+            member.solo = 0
+            member.mess_id = createdMess.id
+
+            return member
+        })
+
+        // update mess
+        const updatedMess = {
+            ...createdMess._doc,
+            members: updatedMember
+        }
+
+        // take members id
+        const ids = updatedMember.map(member => member._id)
+        await User.updateMany({ _id: ids }, { mess_id: createdMess._id }, { new: true })
+        const result = await Mess.findByIdAndUpdate(createdMess._id, updatedMess, { new: true })
+
+        // send response
+        return res.status(200).send({
+            status: true,
+            message: 'Mess created successfully',
+            mess: result
+        })
+
+        // catch error
+    } catch (err) {
+        return errorMessage(res, 500, 'Internal server error occurred')
     }
-    // mess instance
-    const mess = new Mess({
-        mess_name,
-        mess_month,
-        finished: false,
-        manager_id: id,
-        month_id: `m-${date.getTime()}`,
-        month_year: Number(year),
-        total_deposit: 0,
-        total_meal: 0,
-        total_meal_cost: 0,
-        total_other_cost: 0,
-        total_solo_cost: 0,
-        members: []
-    })
-
-    const createdMess = await mess.save()
-    await Month.updateMany(null, { active: false, })
-    const month = new Month({
-        month: mess_month,
-        year: Number(year),
-        active: true,
-        mess_id: createdMess._id
-    })
-
-    // save mess data
-    await month.save()
-
-
-    // update user and add members/manager
-    const updateUser = {
-        ...member._doc,
-        post: 'manager',
-        mess_id: createdMess._id
-    }
-    const updatedMess = {
-        ...createdMess._doc,
-        members: [...createdMess._doc.members, updateUser]
-    }
-    await User.findByIdAndUpdate(id, updateUser, { new: true })
-    const result = await Mess.findByIdAndUpdate(createdMess._id, updatedMess, { new: true })
-
-    // send response
-    return res.status(200).send({
-        status: true,
-        message: 'Mess created successfully',
-        mess: result
-    })
-
-    // catch error
-    // } catch (err) {
-    //     return errorMessage(res, 500, 'Internal server error occurred')
-    // }
 }
 
 // getAllMess
@@ -400,7 +490,6 @@ module.exports.changeManager = async (req, res, next) => {
     }
 }
 
-
 // removeMember
 module.exports.removeMember = async (req, res, next) => {
     try {
@@ -443,6 +532,24 @@ module.exports.removeMember = async (req, res, next) => {
     }
 }
 
+// monthList
+module.exports.monthList = async (req, res, next) => {
+    // try {
+    const { id } = req.user
+    const { mess_id } = await User.findById(id)
+
+    // changed in database
+    const result = await Month.find({ mess_id })
+    // send response
+    return res.status(200).send({
+        status: true,
+        message: 'Month get successfully',
+        month: result
+    })
+    // } catch (err) {
+    //     return errorMessage(res, 500, 'Internal server error occurred')
+    // }
+}
 
 
 

@@ -34,13 +34,24 @@ router.post('/changeManager', jwtVerify, messController.changeManager)
 //POST: http://localhost:5000/api/v1/mess/removeMember
 router.post('/removeMember', jwtVerify, messController.removeMember)
 
-
-
-
+//POST: http://localhost:5000/api/v1/mess/monthList
+router.get('/monthList', jwtVerify, messController.monthList)
 
 //POST: http://localhost:5000/api/v1/mess
 router.post('/', jwtVerify, messController.createMess)
+
+//POST: http://localhost:5000/api/v1/mess/createNew
+router.post('/createNew', jwtVerify, messController.createNew)
+
+
+
+
+
+
+
+
 /* 
+
 
 //GET: http://localhost:5000/api/v1/mess/all
 router.get('/all', userController.getAllUsers)

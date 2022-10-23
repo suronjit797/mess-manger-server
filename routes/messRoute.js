@@ -43,6 +43,9 @@ router.post('/', jwtVerify, messController.createMess)
 //POST: http://localhost:5000/api/v1/mess/createNew
 router.post('/createNew', jwtVerify, messController.createNew)
 
+//POST: http://localhost:5000/api/v1/mess/changeMonth
+router.post('/changeMonth', jwtVerify, messController.changeMonth)
+
 
 
 

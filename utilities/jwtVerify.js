@@ -14,6 +14,7 @@ module.exports = async (req, res, next) => {
             return errorMessage(res, 401, 'Unauthorized access 14', error)
         }
         req.user = decoded
+
         next()
     } catch (error) {
         errorMessage(res, 401, 'Unauthorized access 19', error)

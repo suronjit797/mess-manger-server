@@ -39,8 +39,11 @@ module.exports.register = async (req, res, next) => {
                 solo: 0,
                 post: 'member',
                 mess_id: '',
+                active_month: ''
             })
             const result = await user.save()
+
+            console.log(result)
 
             if (result) {
                 // create token

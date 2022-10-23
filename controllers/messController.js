@@ -53,31 +53,42 @@ module.exports.createMess = async (req, res, next) => {
             month: mess_month,
             year: Number(year),
             active: true,
-            mess_id: createdMess._id
+            month_id: createdMess.month_id
         })
 
         // save mess data
-        await month.save()
+        const monthRes = await month.save()
+
 
 
         // update user and add members/manager
         const updateUser = {
             ...member._doc,
             post: 'manager',
-            mess_id: createdMess._id
+            mess_id: createdMess._id,
+            active_month: monthRes._id
         }
+        const updateUserMess = {
+            ...member._doc,
+            post: 'manager',
+            mess_id: createdMess._id,
+            month_list: [monthRes],
+            active_month: monthRes._id
+        }
+
         const updatedMess = {
             ...createdMess._doc,
-            members: [...createdMess._doc.members, updateUser]
+            members: [...createdMess._doc.members, updateUserMess]
+
         }
-        await User.findByIdAndUpdate(id, updateUser, { new: true })
+        const userRes = await User.findByIdAndUpdate(id, updateUser, { new: true })
         const result = await Mess.findByIdAndUpdate(createdMess._id, updatedMess, { new: true })
 
         // send response
         return res.status(200).send({
             status: true,
             message: 'Mess created successfully',
-            mess: result
+            mess: result,
         })
 
         // catch error
@@ -86,7 +97,7 @@ module.exports.createMess = async (req, res, next) => {
     }
 }
 
-// createMess
+// createNew month
 module.exports.createNew = async (req, res, next) => {
     try {
         const date = new Date()
@@ -109,7 +120,7 @@ module.exports.createNew = async (req, res, next) => {
             mess_month,
             finished: false,
             manager_id: id,
-            month_id: `m-${date.getTime()}`,
+            month_id: messRes.month_id,
             month_year: Number(year),
             total_deposit: 0,
             total_meal: 0,
@@ -130,17 +141,12 @@ module.exports.createNew = async (req, res, next) => {
             month: mess_month,
             year: Number(year),
             active: true,
-            mess_id: createdMess._id
+            month_id: createdMess.month_id
         })
 
         // save month
-        await month.save()
-        // update user and add members/manager
-        const updateUser = {
-            ...member._doc,
-            post: 'manager',
-            mess_id: createdMess._id
-        }
+        const monthRes = await month.save()
+        const monthList = await Month.find({ month_id: messRes.month_id })
 
         // update all member
         const updatedMember = messRes.members.map(member => {
@@ -148,6 +154,8 @@ module.exports.createNew = async (req, res, next) => {
             member.meal = 0
             member.solo = 0
             member.mess_id = createdMess.id
+            member.month_list = monthList
+            member.active_month = monthRes._id
 
             return member
         })
@@ -160,8 +168,10 @@ module.exports.createNew = async (req, res, next) => {
 
         // take members id
         const ids = updatedMember.map(member => member._id)
-        await User.updateMany({ _id: ids }, { mess_id: createdMess._id }, { new: true })
+        await User.updateMany({ _id: ids }, { mess_id: createdMess._id, active_month: monthRes._id }, { new: true })
         const result = await Mess.findByIdAndUpdate(createdMess._id, updatedMess, { new: true })
+
+
 
         // send response
         return res.status(200).send({
@@ -190,12 +200,30 @@ module.exports.getAllMess = async (req, res, next) => {
 module.exports.getSingleMess = async (req, res, next) => {
     try {
         const { id } = req.user
-        const { mess_id } = await User.findById(id)
-        const { month, year } = await Month.findOne({ mess_id, active: true })
-        const result = await Mess.findOne({ mess_id, mess_month: month, month_year: year })
+        const { mess_id, active_month } = await User.findById(id)
+        // const { month_id } = await Mess.findById(mess_id)
+        const { month, year } = await Month.findById(active_month)
+
+        const filter = {
+            mess_id,
+            mess_month: month,
+            month_year: year
+        }
+
+        if (!!req.body.month) {
+            filter.mess_month = req.body.month
+        }
+
+        if (!!req.body.year) {
+            filter.month_year = req.body.year
+        }
+
+        const result = await Mess.findOne(filter)
         if (!result) {
             return errorMessage(res, 404, `No mess found in ${month}, ${year} on your account`)
         }
+
+
         return res.status(200).send({
             status: true,
             message: 'Mess data get successfully',
@@ -212,9 +240,15 @@ module.exports.addMember = async (req, res, next) => {
     try {
         const { id } = req.user
         const { email } = req.body
-        const { mess_id, post } = await User.findById(id)
+        const { mess_id, post, active_month } = await User.findById(id)
+        const month = await Month.findById(active_month)
+        const filter = {
+            mess_id,
+            mess_month: month.month,
+            month_year: month.year
+        }
+        const messResult = await Mess.findOne(filter)
 
-        const messResult = await Mess.findById(mess_id)
         // check empty email
         if (!email) {
             return errorMessage(res, 404, { email: 'Please provide a email to add member' })
@@ -234,15 +268,22 @@ module.exports.addMember = async (req, res, next) => {
         }
         const updatedUser = {
             ...user._doc,
-            mess_id: mess_id
+            mess_id: mess_id,
+            active_month,
+        }
+        const updatedMessUser = {
+            ...user._doc,
+            mess_id: mess_id,
+            active_month,
+            month_list: [month]
         }
 
-        const userResult = await User.findOneAndUpdate({ email }, updatedUser, { new: true }).select('-password')
+        await User.findOneAndUpdate({ email }, updatedUser, { new: true }).select('-password')
         const updatedMess = {
             ...messResult._doc,
-            members: [...messResult.members, userResult]
+            members: [...messResult.members, updatedMessUser]
         }
-        const result = await Mess.findByIdAndUpdate(mess_id, updatedMess, { new: true })
+        const result = await Mess.findOneAndUpdate(filter, updatedMess, { new: true })
         return res.status(200).send({
             status: true,
             message: 'Member add successfully',
@@ -258,19 +299,24 @@ module.exports.addMembersMoney = async (req, res, next) => {
     try {
         const { id } = req.user
         const { email, amount } = req.body
-        const { mess_id, post } = await User.findById(id)
-        const messResult = await Mess.findById(mess_id)
+        const { mess_id, post, active_month } = await User.findById(id)
+        const { month, year } = await Month.findById(active_month)
+
+        const filter = {
+            mess_id,
+            mess_month: month,
+            month_year: year
+        }
+        const messResult = await Mess.findOne(filter)
+
         // validate input
         const validate = addMoneyValidator({ email, amount })
-
         if (!validate.isValid) {
             return errorMessage(res, 405, validate.error)
         }
-
         if (post.toLowerCase() !== 'manager') {
             return errorMessage(res, 405, 'Only manager can add money')
         }
-
         // is mess member
         const isMember = messResult.members.filter(member => member.email === email)
         if (isMember.length === 0) {
@@ -291,7 +337,7 @@ module.exports.addMembersMoney = async (req, res, next) => {
         }
 
         // send response
-        const result = await Mess.findByIdAndUpdate(mess_id, updatedMess, { new: true })
+        const result = await Mess.findOneAndUpdate(filter, updatedMess, { new: true })
         return res.status(200).send({
             status: true,
             message: 'Money add successfully',
@@ -307,15 +353,20 @@ module.exports.addMembersMeal = async (req, res, next) => {
     try {
         const { id } = req.user
         const { email, meal } = req.body
-        const { mess_id, post } = await User.findById(id)
-        const messResult = await Mess.findById(mess_id)
+        const { mess_id, post, active_month } = await User.findById(id)
+        const { month, year } = await Month.findById(active_month)
+        const filter = {
+            mess_id,
+            mess_month: month,
+            month_year: year
+        }
+        const messResult = await Mess.findOne(filter)
+
         // validate input
         const validate = addMealValidator({ email, meal })
-
         if (!validate.isValid) {
             return errorMessage(res, 405, validate.error)
         }
-
         if (post.toLowerCase() !== 'manager') {
             return errorMessage(res, 405, 'Only manager can add meal')
         }
@@ -340,7 +391,7 @@ module.exports.addMembersMeal = async (req, res, next) => {
         }
 
         // send response
-        const result = await Mess.findByIdAndUpdate(mess_id, updatedMess, { new: true })
+        const result = await Mess.findOneAndUpdate(filter, updatedMess, { new: true })
         return res.status(200).send({
             status: true,
             message: 'Meal add successfully',
@@ -356,8 +407,15 @@ module.exports.addMembersMealCost = async (req, res, next) => {
     try {
         const { id } = req.user
         const { email, mealCost } = req.body
-        const { mess_id, post } = await User.findById(id)
-        const messResult = await Mess.findById(mess_id)
+        const { mess_id, post, active_month } = await User.findById(id)
+        const { month, year } = await Month.findById(active_month)
+        const filter = {
+            mess_id,
+            mess_month: month,
+            month_year: year
+        }
+        const messResult = await Mess.findOne(filter)
+
         // validate input
         const validate = addMealCostValidator({ email, mealCost })
 
@@ -381,7 +439,7 @@ module.exports.addMembersMealCost = async (req, res, next) => {
         }
 
         // send response
-        const result = await Mess.findByIdAndUpdate(mess_id, updatedMess, { new: true })
+        const result = await Mess.findOneAndUpdate(filter, updatedMess, { new: true })
         return res.status(200).send({
             status: true,
             message: 'Meal cost add successfully',
@@ -397,8 +455,14 @@ module.exports.addOtherCost = async (req, res, next) => {
     try {
         const { id } = req.user
         const { email, isIndividual, cost } = req.body
-        const { mess_id, post } = await User.findById(id)
-        const messResult = await Mess.findById(mess_id)
+        const { mess_id, post, active_month } = await User.findById(id)
+        const { month, year } = await Month.findById(active_month)
+        const filter = {
+            mess_id,
+            mess_month: month,
+            month_year: year
+        }
+        const messResult = await Mess.findOne(filter)
 
         // authorization
         if (post.toLowerCase() !== 'manager') {
@@ -435,7 +499,7 @@ module.exports.addOtherCost = async (req, res, next) => {
         }
 
         // send response
-        const result = await Mess.findByIdAndUpdate(mess_id, updatedMess, { new: true })
+        const result = await Mess.findOneAndUpdate(filter, updatedMess, { new: true })
         return res.status(200).send({
             status: true,
             message: 'Other cost add successfully',
@@ -451,8 +515,14 @@ module.exports.changeManager = async (req, res, next) => {
     try {
         const { id } = req.user
         const { userId } = req.body
-        const { mess_id, post } = await User.findById(id)
-        const messResult = await Mess.findById(mess_id)
+        const { mess_id, post, active_month } = await User.findById(id)
+        const { month, year } = await Month.findById(active_month)
+        const filter = {
+            mess_id,
+            mess_month: month,
+            month_year: year
+        }
+        const messResult = await Mess.findOne(filter)
 
         // authorization
         if (post.toLowerCase() !== 'manager') {
@@ -477,7 +547,7 @@ module.exports.changeManager = async (req, res, next) => {
 
         await User.findByIdAndUpdate(id, { post: 'member' }, { new: true })
         await User.findByIdAndUpdate(userId, { post: 'manager' }, { new: true })
-        const result = await Mess.findByIdAndUpdate(mess_id, updatedData, { new: true })
+        const result = await Mess.findOneAndUpdate(filter, updatedData, { new: true })
 
         // send response
         return res.status(200).send({
@@ -495,8 +565,14 @@ module.exports.removeMember = async (req, res, next) => {
     try {
         const { id } = req.user
         const { userId } = req.body
-        const { mess_id, post } = await User.findById(id)
-        const messResult = await Mess.findById(mess_id)
+        const { mess_id, post, active_month } = await User.findById(id)
+        const { month, year } = await Month.findById(active_month)
+        const filter = {
+            mess_id,
+            mess_month: month,
+            month_year: year
+        }
+        const messResult = await Mess.findOne(filter)  
 
         // authorization
         if (post.toLowerCase() !== 'manager') {
@@ -520,7 +596,7 @@ module.exports.removeMember = async (req, res, next) => {
         }
 
         // changed in database
-        const result = await Mess.findByIdAndUpdate(mess_id, updatedData, { new: true })
+        const result = await Mess.findOneAndUpdate(filter, updatedData, { new: true })
         // send response
         return res.status(200).send({
             status: true,
@@ -534,21 +610,75 @@ module.exports.removeMember = async (req, res, next) => {
 
 // monthList
 module.exports.monthList = async (req, res, next) => {
-    // try {
-    const { id } = req.user
-    const { mess_id } = await User.findById(id)
+    try {
+        const { id } = req.user
+        const user = await User.findById(id)
+        const mess = await Mess.findById(user.mess_id)
 
-    // changed in database
-    const result = await Month.find({ mess_id })
-    // send response
-    return res.status(200).send({
-        status: true,
-        message: 'Month get successfully',
-        month: result
-    })
-    // } catch (err) {
-    //     return errorMessage(res, 500, 'Internal server error occurred')
-    // }
+        // changed in database
+        const result = await Month.find({ month_id: mess.month_id })
+
+        // send response
+        return res.status(200).send({
+            status: true,
+            message: 'Month get successfully',
+            month: result,
+        })
+    } catch (err) {
+        return errorMessage(res, 500, 'Internal server error occurred')
+    }
+}
+
+// change active monthList
+module.exports.changeMonth = async (req, res, next) => {
+    try {
+        const { id } = req.user
+        const user = await User.findById(id)
+        const mess = await Mess.findById(user.mess_id)
+
+        const { month_id } = req.body
+        const { month, year } = await Month.findById(month_id)
+
+        const filter = {
+            mess_id: user.mess_id,
+            mess_month: month,
+            month_year: year
+        }
+        const messResult = await Mess.findOne(filter)
+
+        if (!month_id) {
+            return errorMessage(res, 500, { month_id: 'Please provide a month id' })
+        }
+
+        const changedMember = mess.members.map(member => {
+            if (member._id.equals(id)) {
+                member.active_month = month_id
+                member.mess_id = messResult._id
+                member.month_list.forEach(month => {
+                    if (month._id.equals(month_id)) {
+                        month.active = true
+                    } else {
+                        month.active = false
+                    }
+                    return month
+                })
+            }
+            return member
+        })
+
+        const result = await Mess.findByIdAndUpdate(user.mess_id, { members: changedMember }, { new: true })
+        await User.findByIdAndUpdate(id, { active_month: month_id }, { new: true })
+
+
+        // send response
+        return res.status(200).send({
+            status: true,
+            message: 'Month change successfully',
+            mess: result,
+        })
+    } catch (err) {
+        return errorMessage(res, 500, 'Internal server error occurred')
+    }
 }
 
 

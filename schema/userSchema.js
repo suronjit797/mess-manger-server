@@ -23,6 +23,8 @@ const userSchema = new Schema({
     solo: Number,
     post: String,
     mess_id: String,
+    month_list: Array,
+    active_month: String,
 },{timestamps:true,});
 
 const User = mongoose.model('User',userSchema);

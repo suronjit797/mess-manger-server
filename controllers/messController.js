@@ -403,6 +403,67 @@ module.exports.addMembersMeal = async (req, res, next) => {
     }
 }
 
+// addMultiMembersMeal meal 
+module.exports.addMultiMembersMeal = async (req, res, next) => {
+    // try {
+    const { id } = req.user
+    const memberBody = req.body
+    const { mess_id, post, active_month } = await User.findById(id)
+    const { month, year } = await Month.findById(active_month)
+    const filter = {
+        mess_id,
+        mess_month: month,
+        month_year: year
+    }
+    const messResult = await Mess.findOne(filter)
+
+    if (post.toLowerCase() !== 'manager') {
+        return errorMessage(res, 405, 'Only manager can add meal')
+    }
+
+    const updatedIds = Object.keys(memberBody) ? Object.keys(memberBody) : []
+
+    // is mess member
+    let isMember
+    updatedIds.forEach(id => {
+        isMember = messResult.members.filter(member => member._id.equals(id))
+
+    })
+
+    if (isMember.length === 0) {
+        return errorMessage(res, 405, 'Member Not Found, Please Add Member')
+    }
+    let totalMealNumber = 0
+    let updatedMeal
+
+    // update member meal
+    updatedIds.forEach(id => {
+        updatedMeal = messResult.members.map(member => {
+            if (member._id.equals(id)) {
+                member.meal = Number(member.meal) + Number(memberBody[id])
+                totalMealNumber = Number(totalMealNumber) + Number(memberBody[id])
+            }
+            return member
+        })
+    })
+    const updatedMess = {
+        ...messResult._doc,
+        total_meal: Number(messResult._doc.total_meal) + totalMealNumber,
+        members: updatedMeal
+    }
+
+    // send response
+    const result = await Mess.findOneAndUpdate(filter, updatedMess, { new: true })
+    return res.status(200).send({
+        status: true,
+        message: 'Meal add successfully',
+        mess: result
+    })
+    // } catch (err) {
+    //     return errorMessage(res, 500, 'Internal server error occurred')
+    // }
+}
+
 // addMember's meal cost
 module.exports.addMembersMealCost = async (req, res, next) => {
     try {

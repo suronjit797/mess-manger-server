@@ -46,6 +46,12 @@ router.post('/createNew', jwtVerify, messController.createNew)
 //POST: http://localhost:5000/api/v1/mess/changeMonth
 router.post('/changeMonth', jwtVerify, messController.changeMonth)
 
+//DELETE: http://localhost:5000/api/v1/mess/deleteOldMonth
+router.delete('/deleteOldMonth/:monthId', jwtVerify, messController.deleteOldMonth)
+
+//DELETE: http://localhost:5000/api/v1/mess/deleteMess
+router.delete('/deleteMess/:messId', jwtVerify, messController.deleteMess)
+
 
 
 

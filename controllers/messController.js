@@ -76,6 +76,7 @@ module.exports.createMess = async (req, res, next) => {
             active_month: monthRes._id
         }
 
+
         const updatedMess = {
             ...createdMess._doc,
             members: [...createdMess._doc.members, updateUserMess]
@@ -201,11 +202,11 @@ module.exports.getSingleMess = async (req, res, next) => {
     try {
         const { id } = req.user
         const { mess_id, active_month } = await User.findById(id)
-        // const { month_id } = await Mess.findById(mess_id)
         const { month, year } = await Month.findById(active_month)
 
+
         const filter = {
-            mess_id,
+            _id: mess_id,
             mess_month: month,
             month_year: year
         }
@@ -572,7 +573,7 @@ module.exports.removeMember = async (req, res, next) => {
             mess_month: month,
             month_year: year
         }
-        const messResult = await Mess.findOne(filter)  
+        const messResult = await Mess.findOne(filter)
 
         // authorization
         if (post.toLowerCase() !== 'manager') {
@@ -681,7 +682,61 @@ module.exports.changeMonth = async (req, res, next) => {
     }
 }
 
+// deleteOldMonth
+module.exports.deleteOldMonth = async (req, res, next) => {
+    try {
+        const { monthId } = req.params
+        const { month, year, mess_id } = req.query
 
+        if (!monthId) {
+            return errorMessage(res, 500, { month_id: 'Please provide deleted month id' })
+        }
+        const result = await Mess.deleteOne({ month_id: mess_id, mess_month: month, month_year: year })
+        await Month.findByIdAndDelete(monthId)
+
+        // send response
+        return res.status(200).send({
+            status: true,
+            message: 'Month change successfully',
+            mess: result,
+        })
+    } catch (err) {
+        return errorMessage(res, 500, 'Internal server error occurred')
+    }
+}
+
+
+// deleteMess
+module.exports.deleteMess = async (req, res, next) => {
+    try {
+        const { messId } = req.params
+        const { monthId } = req.query
+        const { id } = req.user
+        const user = await User.findById(id)
+        const mess = await Mess.findById(messId)
+
+        const userIds = mess.members.map(member => member._id)
+        const deletedMess = await Mess.deleteMany({ month_id: monthId })
+
+        const updateUser = {
+            post: '',
+            mess_id: '',
+            active_month: ''
+        }
+        await User.updateMany({ _id: userIds }, updateUser, { new: true })
+
+
+
+        // send response
+        return res.status(200).send({
+            status: true,
+            message: 'Mess deleted successfully',
+            mess: result,
+        })
+    } catch (err) {
+        return errorMessage(res, 500, 'Internal server error occurred')
+    }
+}
 
 
 
